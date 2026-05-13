@@ -5,7 +5,8 @@ check_new_runs.py
 Airtable Running Club — HyperAgent Skill
 
 Polls Strava for new activities from every registered member.
-Posts each new run to #airtable-running-club in Slack.
+Returns formatted Slack messages as output — HyperAgent posts
+them to #airtable-running-club via its native Slack integration.
 Stores posted activities in Airtable to prevent duplicate posts.
 
 Schedule: run every hour via HyperAgent scheduled invocation.
@@ -13,14 +14,13 @@ Schedule: run every hour via HyperAgent scheduled invocation.
 Environment variables required:
   AIRTABLE_API_KEY       - Airtable personal access token
   AIRTABLE_BASE_ID       - ID of the "Running Team" base
-  SLACK_BOT_TOKEN        - Slack bot OAuth token
-  SLACK_CHANNEL_ID       - Slack channel ID for #airtable-running-club
   STRAVA_CLIENT_ID       - Strava app client ID
   STRAVA_CLIENT_SECRET   - Strava app client secret
 """
 
 import os
 import time
+import json
 import requests
 from datetime import datetime
 
@@ -30,8 +30,6 @@ from pyairtable import Api
 
 AIRTABLE_API_KEY     = os.environ["AIRTABLE_API_KEY"]
 AIRTABLE_BASE_ID     = os.environ["AIRTABLE_BASE_ID"]
-SLACK_BOT_TOKEN      = os.environ["SLACK_BOT_TOKEN"]
-SLACK_CHANNEL_ID     = os.environ["SLACK_CHANNEL_ID"]
 STRAVA_CLIENT_ID     = os.environ["STRAVA_CLIENT_ID"]
 STRAVA_CLIENT_SECRET = os.environ["STRAVA_CLIENT_SECRET"]
 
@@ -189,25 +187,6 @@ def build_slack_message(name: str, activity: dict) -> str:
     ])
 
 
-# ── Slack ──────────────────────────────────────────────────────────────────────
-
-def post_to_slack(text: str) -> None:
-    resp = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
-        json={
-            "channel":      SLACK_CHANNEL_ID,
-            "text":         text,
-            "unfurl_links": False,
-            "unfurl_media": False,
-        },
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    if not data.get("ok"):
-        raise RuntimeError(f"Slack API error: {data.get('error')}")
-
-
 # ── Airtable ───────────────────────────────────────────────────────────────────
 
 def get_posted_ids(activities_table) -> set:
@@ -254,6 +233,7 @@ def main():
     posted_ids = get_posted_ids(activities_table)
     after_ts   = int(time.time()) - LOOKBACK_SECONDS
     new_posts  = 0
+    messages   = []
 
     for member in members:
         fields = member["fields"]
@@ -281,15 +261,24 @@ def main():
                 continue  # already announced
 
             try:
-                post_to_slack(build_slack_message(name, activity))
+                message = build_slack_message(name, activity)
                 record_activity(activities_table, member["id"], activity)
                 posted_ids.add(strava_id)
+                messages.append(message)
                 new_posts += 1
-                print(f"  ✅ Posted: {name} — {activity.get('name', strava_id)}")
             except Exception as e:
-                print(f"  ❌ Failed to post activity {strava_id} for {name}: {e}")
+                print(f"  ❌ Failed to process activity {strava_id} for {name}: {e}")
 
-    print(f"\nDone. {new_posts} new activit{'y' if new_posts == 1 else 'ies'} posted.")
+    if messages:
+        # Output for HyperAgent to post via its native Slack integration
+        print(f"POST_TO_SLACK_CHANNEL: #airtable-running-club")
+        print(f"MESSAGE_COUNT: {len(messages)}")
+        print("---")
+        for msg in messages:
+            print(msg)
+            print("---")
+    else:
+        print("NO_NEW_ACTIVITIES")
 
 
 if __name__ == "__main__":

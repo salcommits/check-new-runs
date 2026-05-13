@@ -1,2 +1,3 @@
 requests>=2.31.0
 pyairtable>=2.3.0
+# No Slack SDK needed — HyperAgent posts to Slack via its native integration
