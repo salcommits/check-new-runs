@@ -15,7 +15,8 @@
 //   STRAVA_CLIENT_SECRET   - Strava app client secret
 //   AIRTABLE_API_KEY       - Airtable PAT with data.records:write
 //   AIRTABLE_BASE_ID       - Running Club base ID (appkyz7mLDeMl0OK0)
-//   HYPERAGENT_WEBHOOK_URL - HyperAgent webhook URL for the welcome trigger
+//   HYPERAGENT_WEBHOOK_URL     - HyperAgent webhook URL for the welcome trigger
+//   HYPERAGENT_WEBHOOK_SECRET  - Must match webhook receiver; sent as X-Hyperagent-Webhook-Secret
 
 const STRAVA_TOKEN_URL   = "https://www.strava.com/oauth/token";
 const STRAVA_ATHLETE_URL = "https://www.strava.com/api/v3/athlete";
@@ -59,7 +60,10 @@ async function triggerWelcome(name, slackUserId) {
   if (!webhookUrl) return; // skip if not configured yet
   await fetch(webhookUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Hyperagent-Webhook-Secret": process.env.HYPERAGENT_WEBHOOK_SECRET,
+    },
     body: JSON.stringify({
       message: `New runner registered. Post this welcome message to #airtable-running-club in Slack: "🎉 ${name} just joined the Airtable Running Club! Welcome to the team! 🏃"`,
       slackUserId,
